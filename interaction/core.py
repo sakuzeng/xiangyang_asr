@@ -233,12 +233,13 @@ class InteractionSystem:
         try:
             response = self.agent.chat(final_query)
             print(f"🤖 Agent: {response}")
-            
+            # TODO 回答处理模块
             # 进入播报模式
             self.state = self.STATE_SPEAKING
             
             # 直接播报 (独占权已在 _run_interaction 统一管理)
             TTSClient.speak(response, wait=True, source="interaction")
+            # TODO 根据识别到的语音增加 播放暂停模块
             time.sleep(0.5) # 等待尾音结束
                     
         except Exception as e:
@@ -251,7 +252,7 @@ class InteractionSystem:
 
     def run(self):
         # 1. 获取音频设备
-        target_device_idx = get_audio_device("Wireless microphone")
+        target_device_idx = get_audio_device("Newmine Mic")
 
         # 2. 获取音频配置
         target_sample_rate = 16000

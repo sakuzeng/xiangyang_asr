@@ -7,7 +7,7 @@ from asr.common import setup_logger
 # 配置日志
 logger = setup_logger(__name__)
 
-def get_audio_device(required_device_name="Wireless microphone"):
+def get_audio_device(required_device_name="Newmine Mic"):
     """
     查找指定的音频设备
     :param required_device_name: 设备名称片段
