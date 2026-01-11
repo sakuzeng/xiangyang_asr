@@ -1,0 +1,19 @@
+# 忽略常见的音频、视频、图片文件，模型权重文件
+*.wav
+*.mp3
+*.mp4
+*.flac
+*.zip
+*.tar.gz
+*.7z
+*.rar
+*.png
+*.pth
+*.pt
+*.bin
+*.ckpt
+*.onnx
+# aishell数据集
+*.text
+# 日志
+logs/*

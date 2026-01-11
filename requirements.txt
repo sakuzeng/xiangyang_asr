@@ -1,0 +1,11 @@
+# 核心推理库
+funasr
+modelscope
+librosa
+numpy<2.0
+
+# Web 服务框架
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
