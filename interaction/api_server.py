@@ -8,7 +8,7 @@ from asr.interaction.utils.buffer import recognition_buffer
 from asr.interaction.context import get_system
 
 # 配置日志
-logger = setup_logger(__name__)
+logger = setup_logger("api_server")
 
 api_app = FastAPI(title="Interaction Recognition API")
 
@@ -68,7 +68,7 @@ async def pause_wake_detection(request: PauseRequest):
     success = system.pause_wake_detection(request.source)
     msg = "Wake detection paused" if success else f"Failed to pause (already paused by {system.pause_source})"
     
-    print(f"⏸️ 唤醒暂停请求 ({request.source}): {'成功' if success else '失败'}")
+    logger.info(f"⏸️ 唤醒暂停请求 ({request.source}): {'成功' if success else '失败'}")
     return PauseResponse(success=success, message=msg)
 
 @api_app.post("/wake/resume", response_model=PauseResponse)
@@ -81,9 +81,9 @@ async def resume_wake_detection(request: PauseRequest):
     success = system.resume_wake_detection(request.source)
     msg = "Wake detection resumed" if success else f"Failed to resume (locked by {system.pause_source})"
     
-    print(f"▶️ 唤醒恢复请求 ({request.source}): {'成功' if success else '失败'}")
+    logger.info(f"▶️ 唤醒恢复请求 ({request.source}): {'成功' if success else '失败'}")
     return PauseResponse(success=success, message=msg)
 
 def run_api_server():
-    print("🌐 启动 API 服务 (端口 8004)...")
+    logger.info("🌐 启动 API 服务 (端口 8004)...")
     uvicorn.run(api_app, host="0.0.0.0", port=8004, log_level="error")

@@ -3,7 +3,7 @@ import time
 from asr.common import setup_logger
 
 # 配置日志
-logger = setup_logger(__name__)
+logger = setup_logger("wake_word")
 
 try:
     from pypinyin import lazy_pinyin

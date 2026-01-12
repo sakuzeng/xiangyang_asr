@@ -1,3 +1,5 @@
+# FIXED logger显示不能流式显示了
+# TEST 设置对话中的最大识别时间（有可能会一直说话）
 import sys
 import os
 import time
@@ -14,7 +16,7 @@ from asr.interaction.context import set_system
 from asr.interaction.utils.text_processing import process_agent_response
 
 # 配置日志
-logger = setup_logger(__name__)
+logger = setup_logger("core")
 
 # 必须确保 sys.path 已由入口脚本设置好，才能导入以下模块
 try:
@@ -30,6 +32,9 @@ class InteractionSystem:
     STATE_LISTENING = "LISTENING"   # 正在倾听用户指令
     STATE_THINKING = "THINKING"     # 调用 Agent 思考中
     STATE_SPEAKING = "SPEAKING"     # TTS 播报中
+
+    # 配置参数
+    MAX_TURN_DURATION = 20.0        # 单轮对话最大时长（秒），防止无限录音
 
     def __init__(self):
         # 注册自身到全局上下文
@@ -63,16 +68,18 @@ class InteractionSystem:
         self.pause_lock = threading.Lock()
         
         print(f"✅ 系统初始化完成 (唤醒词: {self.wake_word})")
+        logger.info(f"✅ 系统初始化完成 (唤醒词: {self.wake_word})")
+
 
     def _init_model(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"🖥️  运行设备: {device.upper()}")
+        logger.info(f"🖥️  运行设备: {device.upper()}")
         
         # 本地微调模型路径
         local_model_dir = "/home/devuser/workspace/asr/FunASR-main/examples/industrial_data_pretraining/sense_voice/outputs/sensevoice_finetune_v3"
         model_id = local_model_dir if os.path.exists(local_model_dir) else "iic/SenseVoiceSmall"
         
-        print(f"正在加载 StreamingSenseVoice 模型: {model_id}")
+        logger.info(f"正在加载 StreamingSenseVoice 模型: {model_id}")
         contexts = [self.wake_word, "变"]
         
         self.model = StreamingSenseVoice(
@@ -80,7 +87,7 @@ class InteractionSystem:
             model=model_id,
             device=device,
         )
-        print("✅ 模型加载成功")
+        logger.info("✅ 模型加载成功")
 
     def set_wake_paused(self, paused: bool):
         """(已弃用) 请使用 pause_wake_detection / resume_wake_detection"""
@@ -97,7 +104,7 @@ class InteractionSystem:
                 if self.pause_source == source:
                     return True # 同一个源，视为成功
                 else:
-                    print(f"⚠️ 暂停失败: 已被 '{self.pause_source}' 暂停")
+                    logger.warning(f"⚠️ 暂停失败: 已被 '{self.pause_source}' 暂停")
                     return False
             
             self.wake_detection_paused = True
@@ -114,7 +121,7 @@ class InteractionSystem:
                 return True # 本来就没暂停
             
             if self.pause_source != source:
-                print(f"⚠️ 恢复失败: 当前由 '{self.pause_source}' 暂停, '{source}' 无权恢复")
+                logger.warning(f"⚠️ 恢复失败: 当前由 '{self.pause_source}' 暂停, '{source}' 无权恢复")
                 return False
             
             self.wake_detection_paused = False
@@ -123,7 +130,7 @@ class InteractionSystem:
 
     def handle_wake_up(self):
         """处理唤醒事件"""
-        print("💡 触发唤醒逻辑...")
+        logger.info("💡 触发唤醒逻辑...")
         
         # 1. 切换状态 (先设为 SPEAKING 以忽略 "我在" 的声音)
         self.state = self.STATE_SPEAKING
@@ -161,7 +168,7 @@ class InteractionSystem:
                 time.sleep(0.1)
                 
         except Exception as e:
-            print(f"❌ 交互循环异常: {e}")
+            logger.error(f"❌ 交互循环异常: {e}")
         finally:
             # 退出交互，重置状态
             self.state = self.STATE_WAIT_WAKE
@@ -172,11 +179,11 @@ class InteractionSystem:
             
             # 确保释放独占权
             TTSClient.set_exclusive_mode(False, allowed_source="interaction")
-            print("💤 回到等待唤醒模式")
+            logger.info("💤 回到等待唤醒模式")
 
     def _process_one_turn(self) -> bool:
         """处理一轮对话，返回是否继续"""
-        print("\n🎤 请说话...")
+        logger.info("\n🎤 请说话...")
         
         # 录音参数
         listen_duration = 8.0  # 最大聆听时间
@@ -193,30 +200,35 @@ class InteractionSystem:
             while time.time() - start_time < listen_duration:
                 # 检查是否超时（说完后沉默了一段时间）
                 if has_spoken and (time.time() - last_speech_end > silence_timeout):
-                    print("⚡ 说话结束判定")
+                    logger.info("⚡ 说话结束判定")
                     break
                 
                 # 更新说话状态
                 if self.is_speech_active:
                     has_spoken = True
                     last_speech_end = time.time()
-                    # 如果正在说话，延长总聆听时间
+                    # 如果正在说话，延长总聆听时间，但不能超过最大时长
                     if time.time() - start_time > listen_duration - 2.0:
-                        listen_duration += 1.0
+                        if listen_duration < self.MAX_TURN_DURATION:
+                            listen_duration = min(listen_duration + 1.0, self.MAX_TURN_DURATION)
+                            logger.debug(f"⏳ 延长聆听时间至: {listen_duration}s")
+                        else:
+                            logger.info("⚡ 达到最大聆听时长，强制结束录音")
+                            break
                 
                 time.sleep(0.1)
             
             # 获取识别结果
             # 注意: 在 start_recording() 状态下，get_recent 会自动获取从录音开始到现在的所有内容，duration 参数会被忽略
             final_query = recognition_buffer.get_recent()
-            print(f"\n📝 识别结果: {final_query}")
+            logger.info(f"\n📝 识别结果: {final_query}")
             
         finally:
             recognition_buffer.stop_recording()
 
         # 1. 超时检测 (无语音)
         if not final_query:
-            print("⌛ 交互超时 (无语音)")
+            logger.info("⌛ 交互超时 (无语音)")
             self.state = self.STATE_SPEAKING
             TTSClient.speak("再见", wait=True, source="interaction")
             return False
@@ -224,7 +236,7 @@ class InteractionSystem:
         # 2. 退出指令检测
         exit_keywords = ["结束对话", "退出", "停止交互", "关闭对话", "再见", "结束"]
         if any(kw in final_query for kw in exit_keywords):
-            print(f"🛑 用户请求退出: {final_query}")
+            logger.info(f"🛑 用户请求退出: {final_query}")
             self.state = self.STATE_SPEAKING # 🆕 防止听到自己的声音 (回声消除)
             TTSClient.speak("好的，再见", wait=True, source="interaction")
             return False
@@ -233,21 +245,20 @@ class InteractionSystem:
         self.state = self.STATE_THINKING
         try:
             response = self.agent.chat(final_query)
-            print(f"🤖 Agent: {response}")
-            # TEST 测试文本处理结果
+            logger.info(f"🤖 Agent: {response}")
+            # TEST 测试agent文本处理结果
             # 回答处理模块：优化文本以适应 TTS 播报 (处理日期、编号等)
             response = process_agent_response(response)
-            
+            logger.info(f"📝 处理后的回答: {response}")
             # 进入播报模式
             self.state = self.STATE_SPEAKING
-            
             # 直接播报 (独占权已在 _run_interaction 统一管理)
             TTSClient.speak(response, wait=True, source="interaction")
             # TODO 根据识别到的语音增加 播放暂停模块
-            time.sleep(0.5) # 等待尾音结束
+            # time.sleep(0.5) # 等待尾音结束
                     
         except Exception as e:
-            print(f"❌ 交互异常: {e}")
+            logger.error(f"❌ 交互异常: {e}")
             TTSClient.speak("我出错了", wait=True, source="interaction")
         
         # 准备下一轮，切换回监听状态
@@ -276,7 +287,7 @@ class InteractionSystem:
         
         stream = create_input_stream(target_device_idx, stream_sample_rate)
         stream.start()
-        print(f"\n🚀 系统就绪,请说 '{self.wake_word}' 唤醒")
+        logger.info(f"\n🚀 系统就绪,请说 '{self.wake_word}' 唤醒")
 
         try:
             while True:
@@ -313,20 +324,23 @@ class InteractionSystem:
                                     continue
                             
                                 if text != self.current_text_buffer:
-                                    print(f"\r👂 识别中: {text}", end="", flush=True)
+                                    # logger.debug(f"👂 识别中: {text}")
+                                    # 使用 sys.stdout 实现流式显示的打字机效果
+                                    sys.stdout.write(f"\r👂 识别中: {text}")
+                                    sys.stdout.flush()
                                     self.current_text_buffer = text
                                     recognition_buffer.add(text)
                     
                         # 只有在未暂停唤醒检测时，才检查唤醒词
                         if not self.wake_detection_paused and text and check_wake_word(text, self.wake_word, self.wake_word_pinyin):
                             if not recognition_buffer.is_active:
-                                print(f"\n🚀 检测到唤醒词！")
+                                logger.info(f"\n🚀 检测到唤醒词！")
                                 self.handle_wake_up()
                                 self.current_text_buffer = ""
                                 self.model.reset()
                                 break
                             else:
-                                print(f"\r👂 识别中: {text} (外部录音中,暂不响应唤醒)", end="", flush=True)
+                                logger.info(f"👂 识别中: {text} (外部录音中,暂不响应唤醒)")
                         elif not recognition_buffer.is_active and "end" in speech_dict:
                             self.model.reset()
                             self.current_text_buffer = ""
@@ -351,14 +365,17 @@ class InteractionSystem:
                         for res in self.model.streaming_inference(speech_samples * 32768, "end" in speech_dict):
                             text = res.get("text", "")
                             if text and text != self.current_text_buffer:
-                                print(f"\r🎤 交互识别: {text}", end="", flush=True)
-                                self.current_text_buffer = text
-                                recognition_buffer.add(text)
+                                    # logger.debug(f"🎤 交互识别: {text}")
+                                    # 使用 sys.stdout 实现流式显示的打字机效果
+                                    sys.stdout.write(f"\r🎤 交互识别: {text}")
+                                    sys.stdout.flush()
+                                    self.current_text_buffer = text
+                                    recognition_buffer.add(text)
                 
                 time.sleep(0.001)
 
         except KeyboardInterrupt:
-            print("\n🛑 停止服务...")
+            logger.info("\n🛑 停止服务...")
             stream.stop()
             stream.close()
             # 🆕 仅在非等待唤醒状态下（即可能持有锁的状态）才尝试释放

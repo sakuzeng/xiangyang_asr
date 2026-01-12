@@ -3,7 +3,7 @@ import time
 from asr.common import setup_logger
 
 # 配置日志
-logger = setup_logger(__name__)
+logger = setup_logger("context")
 
 # 全局系统实例持有者，用于解决循环引用
 _system_instance = None

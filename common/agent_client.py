@@ -1,6 +1,11 @@
 import uuid
 import requests
 import time
+import logging
+from .logger import setup_logger
+
+# 配置日志
+logger = setup_logger("agent_client")
 
 # Agent 服务地址
 AGENT_SERVER_URL = "http://192.168.77.102:8602/v1/chat/completions"
@@ -14,7 +19,7 @@ class AgentClient:
         """重置会话ID和记忆"""
         self.session_id = str(uuid.uuid4())
         self.memory_data = None
-        print(f"🔄 会话重置: {self.session_id}")
+        logger.info(f"🔄 会话重置: {self.session_id}")
 
     def chat(self, query):
         request_id = str(uuid.uuid4())
@@ -27,7 +32,7 @@ class AgentClient:
         }
         
         try:
-            print(f"🤔 思考中...")
+            logger.info(f"🤔 思考中...")
             resp = requests.post(AGENT_SERVER_URL, json=payload, timeout=20.0)
             if resp.status_code == 200:
                 res_data = resp.json()
@@ -37,8 +42,8 @@ class AgentClient:
                 self.memory_data = res_data.get("memory")
                 return res_data.get("response", "")
             else:
-                print(f"❌ Agent Error Status: {resp.status_code}")
+                logger.error(f"❌ Agent Error Status: {resp.status_code}")
                 return "服务暂时不可用。"
         except Exception as e:
-            print(f"❌ Agent Request Error: {e}")
+            logger.error(f"❌ Agent Request Error: {e}")
             return "连接服务器失败。"

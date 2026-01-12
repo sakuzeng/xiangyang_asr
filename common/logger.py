@@ -24,12 +24,15 @@ def setup_logger(name):
     
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
+    # 防止日志向上传递给 root logger，避免重复打印
+    logger.propagate = False
 
     # 避免重复添加 handler
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
         formatter = LocalFormatter(
-            "[%(asctime)s] [%(levelname)s] %(message)s",
+            # 修改格式，包含 Logger 名称，模仿 INFO:core: 风格但带时间戳
+            "[%(asctime)s] %(levelname)s:%(name)s: %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
         handler.setFormatter(formatter)

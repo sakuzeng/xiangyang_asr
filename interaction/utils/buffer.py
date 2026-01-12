@@ -5,7 +5,7 @@ from threading import Lock
 from asr.common import setup_logger
 
 # 配置日志
-logger = setup_logger(__name__)
+logger = setup_logger("buffer")
 
 class RecognitionBuffer:
     """识别结果缓冲区 (线程安全)"""

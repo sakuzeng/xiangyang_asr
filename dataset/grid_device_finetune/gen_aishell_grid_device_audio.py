@@ -168,7 +168,7 @@ def main():
     print()
     
     # 生成数据
-    generate_aishell_jsonl(sample_count=3000)
+    generate_aishell_jsonl(sample_count=4000)
 
 
 if __name__ == "__main__":

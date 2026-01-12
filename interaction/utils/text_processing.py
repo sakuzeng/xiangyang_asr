@@ -1,4 +1,7 @@
 import re
+from asr.common import setup_logger
+
+logger = setup_logger("text_processing")
 
 def process_agent_response(text):
     """
@@ -52,10 +55,10 @@ if __name__ == "__main__":
         "普通文本，没有特殊格式"
     ]
 
-    print("=== 测试开始 ===")
+    logger.info("=== 测试开始 ===")
     for original in test_cases:
         processed = process_agent_response(original)
-        print(f"原文本: {original}")
-        print(f"处理后: {processed}")
-        print("-" * 20)
-    print("=== 测试结束 ===")
+        logger.info(f"原文本: {original}")
+        logger.info(f"处理后: {processed}")
+        logger.info("-" * 20)
+    logger.info("=== 测试结束 ===")
