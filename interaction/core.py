@@ -11,6 +11,7 @@ from asr.interaction.utils.buffer import recognition_buffer
 from asr.interaction.utils.audio import get_audio_device, get_audio_config, create_input_stream
 from asr.interaction.utils.wake_word import check_wake_word
 from asr.interaction.context import set_system
+from asr.interaction.utils.text_processing import process_agent_response
 
 # 配置日志
 logger = setup_logger(__name__)
@@ -233,7 +234,10 @@ class InteractionSystem:
         try:
             response = self.agent.chat(final_query)
             print(f"🤖 Agent: {response}")
-            # TODO 回答处理模块
+            # TEST 测试文本处理结果
+            # 回答处理模块：优化文本以适应 TTS 播报 (处理日期、编号等)
+            response = process_agent_response(response)
+            
             # 进入播报模式
             self.state = self.STATE_SPEAKING
             
