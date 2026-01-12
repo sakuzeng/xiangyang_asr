@@ -292,10 +292,10 @@ def main():
     print(f"  1. 检查生成的音频文件: {OUTPUT_AUDIO_DIR}")
     print(f"  2. 验证JSONL文件格式: head -n 3 {AISHELL_OUTPUT}")
     print(f"  3. 合并原始数据和加噪数据:")
-    print(f"     cat {AISHELL_JSONL} {AISHELL_OUTPUT} > audio_data/aishell_combined.jsonl")
-    print(f"     cat {GRID_DEVICE_JSONL} {GRID_DEVICE_OUTPUT} > audio_data/grid_combined.jsonl")
+    print(f"     cat {AISHELL_JSONL} {AISHELL_OUTPUT} > audio_data_2/aishell_combined.jsonl")
+    print(f"     cat {GRID_DEVICE_JSONL} {GRID_DEVICE_OUTPUT} > audio_data_2/grid_combined.jsonl")
     print(f"  4. 或合并所有数据:")
-    print(f"     cat {AISHELL_JSONL} {AISHELL_OUTPUT} {GRID_DEVICE_JSONL} {GRID_DEVICE_OUTPUT} > audio_data/all_data.jsonl")
+    print(f"     cat {AISHELL_JSONL} {AISHELL_OUTPUT} {GRID_DEVICE_JSONL} {GRID_DEVICE_OUTPUT} > audio_data_2/all_data.jsonl")
 
 
 if __name__ == "__main__":

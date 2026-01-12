@@ -16,4 +16,4 @@
 # aishell数据集
 *.text
 # 日志
-logs/*
+logs/

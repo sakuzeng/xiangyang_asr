@@ -12,8 +12,8 @@ from pydub import AudioSegment
 # 配置路径
 FAILED_FILE = "audio_data_2/failed_items.json"  # 失败记录文件
 ORIGINAL_TEXT_FILE = "grid_device_query_2.jsonl"  # 原始文本文件
-AUDIO_DIR = "audio_data_2/grid_device_audio_data_2"  # 音频保存目录
-JSONL_FILE = "audio_data_2/grid_device_audio_data_2.jsonl"  # JSONL 输出文件
+AUDIO_DIR = "audio_data_2/grid_device_audio_data"  # 音频保存目录
+JSONL_FILE = "audio_data_2/grid_device_audio_data.jsonl"  # JSONL 输出文件
 RETRY_OUTPUT = "audio_data_2/retry_results.json"  # 重试结果记录
 
 # Edge-TTS 中文语音列表
