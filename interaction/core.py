@@ -1,3 +1,4 @@
+# TODO tail -f 显示流式异常
 # FIXED logger显示不能流式显示了
 # TEST 设置对话中的最大识别时间（有可能会一直说话）
 import sys
@@ -13,7 +14,7 @@ from asr.interaction.utils.buffer import recognition_buffer
 from asr.interaction.utils.audio import get_audio_device, get_audio_config, create_input_stream
 from asr.interaction.utils.wake_word import check_wake_word
 from asr.interaction.context import set_system
-from asr.interaction.utils.text_processing import process_agent_response
+from asr.interaction.utils.text_preprocess import process_agent_response
 
 # 配置日志
 logger = setup_logger("core")
@@ -89,13 +90,6 @@ class InteractionSystem:
         )
         logger.info("✅ 模型加载成功")
 
-    def set_wake_paused(self, paused: bool):
-        """(已弃用) 请使用 pause_wake_detection / resume_wake_detection"""
-        self.wake_detection_paused = paused
-        if paused:
-            self.model.reset()
-            self.current_text_buffer = ""
-
     def pause_wake_detection(self, source: str) -> bool:
         """暂停唤醒检测 (带来源记录)"""
         with self.pause_lock:
@@ -128,12 +122,26 @@ class InteractionSystem:
             self.pause_source = None
             return True
 
+    def _reset_audio_state(self, delay: float = 0.0):
+        """
+        重置音频相关状态，用于清除上一轮的 VAD 惯性或尾音干扰
+        Args:
+            delay: 重置前的等待时间 (秒)，用于等待 TTS 尾音或回声消散
+        """
+        if delay > 0:
+            time.sleep(delay)
+            
+        self.vad.reset_states()
+        self.model.reset()
+        self.current_text_buffer = ""
+        self.is_speech_active = False
+
     def handle_wake_up(self):
         """处理唤醒事件"""
         logger.info("💡 触发唤醒逻辑...")
         
-        # 1. 切换状态 (先设为 SPEAKING 以忽略 "我在" 的声音)
-        self.state = self.STATE_SPEAKING
+        # 1. 切换状态 (设为 THINKING 以忽略 "我在" 的声音，且无需打断)
+        self.state = self.STATE_THINKING
         
         # 2. 启动交互线程，避免阻塞主循环音频读取
         threading.Thread(target=self._run_interaction, daemon=True).start()
@@ -183,6 +191,11 @@ class InteractionSystem:
 
     def _process_one_turn(self) -> bool:
         """处理一轮对话，返回是否继续"""
+        
+        # 🆕 每一轮开始前，确保音频状态是干净的
+        # 正常交互不需要额外延迟，因为 TTS 播报结束本身就有间隔
+        self._reset_audio_state(delay=0.0)
+        
         logger.info("\n🎤 请说话...")
         
         # 录音参数
@@ -229,7 +242,7 @@ class InteractionSystem:
         # 1. 超时检测 (无语音)
         if not final_query:
             logger.info("⌛ 交互超时 (无语音)")
-            self.state = self.STATE_SPEAKING
+            self.state = self.STATE_THINKING # 避免回声，且无需打断
             TTSClient.speak("再见", wait=True, source="interaction")
             return False
 
@@ -237,7 +250,7 @@ class InteractionSystem:
         exit_keywords = ["结束对话", "退出", "停止交互", "关闭对话", "再见", "结束"]
         if any(kw in final_query for kw in exit_keywords):
             logger.info(f"🛑 用户请求退出: {final_query}")
-            self.state = self.STATE_SPEAKING # 🆕 防止听到自己的声音 (回声消除)
+            self.state = self.STATE_THINKING # 避免回声，且无需打断
             TTSClient.speak("好的，再见", wait=True, source="interaction")
             return False
 
@@ -254,7 +267,7 @@ class InteractionSystem:
             self.state = self.STATE_SPEAKING
             # 直接播报 (独占权已在 _run_interaction 统一管理)
             TTSClient.speak(response, wait=True, source="interaction")
-            # TODO 根据识别到的语音增加 播放暂停模块
+            # TEST 根据识别到的语音增加 播放暂停模块
             # time.sleep(0.5) # 等待尾音结束
                     
         except Exception as e:
@@ -346,9 +359,33 @@ class InteractionSystem:
                             self.current_text_buffer = ""
                 else:
                     # ===== 交互模式 =====
-                    # 如果正在思考或播报，暂停识别以避免自回声
-                    if self.state in [self.STATE_THINKING, self.STATE_SPEAKING]:
+                    # 如果正在思考，暂停识别以避免自回声
+                    if self.state == self.STATE_THINKING:
                         time.sleep(0.01)
+                        continue
+
+                    # 如果正在播报，启用打断检测 (仅识别特定关键词)
+                    if self.state == self.STATE_SPEAKING:
+                        vad_outs = self.vad(audio_chunk)
+                        for speech_dict, speech_samples in vad_outs:
+                            if "start" in speech_dict:
+                                self.model.reset()
+                                self.current_text_buffer = ""
+                            
+                            for res in self.model.streaming_inference(speech_samples * 32768, "end" in speech_dict):
+                                text = res.get("text", "")
+                                if text and text != self.current_text_buffer:
+                                    sys.stdout.write(f"\r👂 播报中识别: {text}")
+                                    sys.stdout.flush()
+                                    self.current_text_buffer = text
+                                    
+                                    # 关键词打断检测
+                                    if "结束" in text:
+                                        logger.info(f"\n🛑 检测到打断指令: {text}")
+                                        threading.Thread(target=TTSClient.stop_current_playback).start()
+                                        
+                                        # 🆕 优化: 调用统一的重置模块，带 0.5s 延迟以消除尾音
+                                        self._reset_audio_state(delay=0.5)
                         continue
 
                     # VAD 仍然运行以检测说话结束
@@ -376,8 +413,19 @@ class InteractionSystem:
 
         except KeyboardInterrupt:
             logger.info("\n🛑 停止服务...")
-            stream.stop()
-            stream.close()
-            # 🆕 仅在非等待唤醒状态下（即可能持有锁的状态）才尝试释放
-            if self.state != self.STATE_WAIT_WAKE:
+        except Exception as e:
+            logger.error(f"❌ 系统主循环发生未捕获异常: {e}", exc_info=True)
+        finally:
+            logger.info("🧹 正在清理资源...")
+            try:
+                stream.stop()
+                stream.close()
+            except:
+                pass
+            
+            # 确保释放独占权
+            try:
                 TTSClient.set_exclusive_mode(False, allowed_source="interaction")
+                logger.info("🔓 已释放独占模式")
+            except Exception as e:
+                logger.error(f"⚠️ 释放独占模式失败: {e}")

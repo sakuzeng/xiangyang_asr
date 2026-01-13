@@ -74,6 +74,35 @@ class TTSClient:
         except Exception as e:
             logger.error(f"⚠️ 设置TTS独占模式异常: {e}")
             return False
+    # TEST:增加播放暂停
+    @staticmethod
+    def stop_current_playback(source=None):
+        """停止当前播放 (保留队列)
+        Args:
+            source: 请求停止的来源，用于独占模式校验。如果不传，默认为 DEFAULT_SOURCE
+        """
+        if source is None:
+            source = TTSClient.DEFAULT_SOURCE
+
+        try:
+            # 假设 TTS_CONTROL_URL 是 .../control/exclusive_mode
+            base_url = TTS_CONTROL_URL.rsplit("/", 1)[0]
+            url = f"{base_url}/stop_current_playback"
+            
+            payload = {
+                "allowed_source": source
+            }
+
+            response = requests.post(url, json=payload, timeout=2.0)
+            if response.status_code == 200:
+                logger.info(f"🛑 [{source}] 已发送停止当前播放请求")
+                return True
+            else:
+                logger.warning(f"⚠️ 停止当前播放失败: {response.status_code}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ 停止当前播放请求异常: {e}")
+            return False
 
     @staticmethod
     def speak(text, volume=100, wait=True, source=None):
