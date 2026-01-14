@@ -9,8 +9,8 @@ logger = setup_logger("tts_client")
 # 配置
 TTS_SERVER_URL = "http://192.168.77.103:28001/speak_msg"
 TTS_MONITOR_URL = "http://192.168.77.103:28001/monitor"
-TTS_CONTROL_URL = "http://192.168.77.103:28001/control/exclusive_mode"
-
+TTS_EXCLUSIVE_MODE_URL = "http://192.168.77.103:28001/control/exclusive_mode"
+TTS_STOP_CURRENT_PLAY_URL = "http://192.168.77.103:28001/control/stop_current_play"
 class TTSClient:
     """HTTP TTS 客户端"""
     DEFAULT_SOURCE = "interaction"
@@ -74,7 +74,7 @@ class TTSClient:
         except Exception as e:
             logger.error(f"⚠️ 设置TTS独占模式异常: {e}")
             return False
-    # TEST:增加播放暂停
+    # FIXED:增加播放暂停
     @staticmethod
     def stop_current_playback(source=None):
         """停止当前播放 (保留队列)
@@ -85,15 +85,11 @@ class TTSClient:
             source = TTSClient.DEFAULT_SOURCE
 
         try:
-            # 假设 TTS_CONTROL_URL 是 .../control/exclusive_mode
-            base_url = TTS_CONTROL_URL.rsplit("/", 1)[0]
-            url = f"{base_url}/stop_current_playback"
-            
             payload = {
                 "allowed_source": source
             }
 
-            response = requests.post(url, json=payload, timeout=2.0)
+            response = requests.post(TTS_STOP_CURRENT_PLAY_URL, json=payload, timeout=2.0)
             if response.status_code == 200:
                 logger.info(f"🛑 [{source}] 已发送停止当前播放请求")
                 return True

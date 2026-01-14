@@ -77,7 +77,7 @@ class InteractionSystem:
         logger.info(f"🖥️  运行设备: {device.upper()}")
         
         # 本地微调模型路径
-        local_model_dir = "/home/devuser/workspace/asr/FunASR-main/examples/industrial_data_pretraining/sense_voice/outputs/sensevoice_finetune_v3"
+        local_model_dir = "/home/devuser/workspace/asr/FunASR-main/examples/industrial_data_pretraining/sense_voice/outputs/sensevoice_finetune_v4"
         model_id = local_model_dir if os.path.exists(local_model_dir) else "iic/SenseVoiceSmall"
         
         logger.info(f"正在加载 StreamingSenseVoice 模型: {model_id}")
