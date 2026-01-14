@@ -1,74 +1,66 @@
 ```mermaid
 graph TB
-    subgraph Layer1 ["🔌 接入与控制层"]
+    subgraph AudioProcessing ["🎙️ 音频处理层 (主线程)"]
         direction TB
-        Entry["🚀 程序入口<br/>(interaction.py)"]
-        API["🌐 API 服务<br/>(api_server.py)"]
+        Mic["麦克风输入"] --> Buffer["🔄 Ring Buffer"]
+        Buffer --> VAD["🔈 VAD 和 ASR"]
     end
 
-    subgraph Layer2 ["🧠 核心逻辑层"]
-        Core["InteractionSystem<br/>(core.py)"]
+    subgraph MainLoop ["🔄 主循环逻辑"]
+        StateWait["🛑 WAIT_WAKE<br/>(等待唤醒)"]
+        WakeCheck{{"⚡ 唤醒检测"}}
+        
+        %% 连接音频层与主循环
+        VAD -->|识别文本| WakeCheck
+        StateWait -.->|控制| VAD
+        
+        WakeCheck -->|否| StateWait
+        WakeCheck -->|是: '小安'| StartSession["🚀 启动交互线程<br/>(handle_wake_up)"]
     end
 
-    subgraph Layer3 ["⚙️ 能力支持层 (utils)"]
-        direction LR
+    subgraph InteractionThread ["🧵 交互线程 (_run_interaction)"]
+        direction TB
         
-        subgraph AudioUtils ["🔊 音频工具 (audio.py)"]
-            Device["设备查找<br/>(sounddevice)"]
-            Stream["输入流管理"]
-            Resample["重采样 (soxr/scipy)"]
-        end
+        StartSession --> InitSession["⚙️ 初始化会话<br/>(申请独占, Reset Agent)"]
+        InitSession --> SayHi["🔊 TTS: '我在'"]
+        SayHi --> StateListen
         
-        subgraph BufferUtils ["🔄 缓冲管理 (buffer.py)"]
-            RingBuf["RingBuffer<br/>(60s 窗口)"]
-            Merge["智能文本拼接<br/>(去重/增量合并)"]
-        end
+        StateListen["👂 LISTENING<br/>(录音 和 识别)"]
         
-        subgraph VADUtils ["🔈 语音检测 (vad_utils.py)"]
-            ONNX["ONNX 推理"]
-            Silero["Silero VAD (v4/v5)"]
-        end
+        %% 连接音频层与交互线程
+        VAD -.->|写入 Buffer / 实时文本| StateListen
         
-        subgraph WakeUtils ["⚡ 唤醒检测 (wake_word.py)"]
-            TextMatch["文本匹配"]
-            Pinyin["拼音匹配<br/>(pypinyin)"]
-        end
+        AnalyzeResult{{"🔍 分析识别结果"}}
+        StateListen --> AnalyzeResult
         
-        ASR["🗣️ ASR 引擎<br/>(SenseVoice)"]
+        AnalyzeResult -->|无语音/超时| SayBye1["🔊 TTS: '再见'"]
+        AnalyzeResult -->|退出指令| SayBye2["🔊 TTS: '好的，再见'"]
+        AnalyzeResult -->|有效指令| StateThink
+        
+        SayBye1 --> EndSession["👋 结束会话<br/>(释放独占, 状态重置)"]
+        SayBye2 --> EndSession
+        
+        StateThink["🤔 THINKING<br/>(Agent 处理)"]
+        StateSpeak["🔊 SPEAKING<br/>(TTS 播报回复)"]
+        
+        StateThink -->|Agent 回复| StateSpeak
+        StateSpeak -->|播报结束| StateListen
+        StateSpeak -->|检测到中断| StateListen
     end
 
-    subgraph Layer4 ["🌐 外部依赖层"]
-        direction LR
-        Agent["🤖 Agent 服务"]
-        TTS["📢 TTS 服务"]
-    end
+    EndSession --> StateWait
 
-    %% 启动与控制
-    Entry -->|启动| Core
-    Entry -->|启动| API
-    API -.->|控制状态/暂停| Core
-
-    %% 核心依赖
-    Core -->|调用| AudioUtils
-    Core -->|读写| BufferUtils
-    Core -->|检测静音| VADUtils
-    Core -->|检测唤醒| WakeUtils
-    Core -->|实时转写| ASR
-
-    %% 外部交互
-    Core -->|发送文本| Agent
-    Core -->|发送播报| TTS
-
-    %% 样式优化
-    classDef layer1 fill:#e3f2fd,stroke:#1565c0,stroke-width:1px;
-    classDef layer2 fill:#fff3e0,stroke:#e65100,stroke-width:2px;
-    classDef layer3 fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px;
-    classDef layer4 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px;
-    classDef utils fill:#f1f8e9,stroke:#558b2f,stroke-width:1px,stroke-dasharray: 5 5;
-
-    class Entry,API layer1;
-    class Core layer2;
-    class ASR,VADUtils,AudioUtils,BufferUtils,WakeUtils layer3;
-    class Agent,TTS layer4;
-    class AudioUtils,BufferUtils,VADUtils,WakeUtils utils;
+    %% 外部服务连接
+    StateThink -.->|HTTP 请求| Agent["🤖 Agent 服务"]
+    StateSpeak -.->|HTTP 请求| TTS["📢 TTS 服务"]
+    
+    %% 样式定义
+    classDef state fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    class StateWait,StateListen,StateThink,StateSpeak state;
+    
+    classDef logic fill:#fff3e0,stroke:#e65100,stroke-width:1px;
+    class WakeCheck,AnalyzeResult logic;
+    
+    classDef session fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,stroke-dasharray: 5 5;
+    class InteractionThread session;
 ```
