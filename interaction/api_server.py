@@ -40,7 +40,7 @@ async def listen_recent(request: RecognitionRequest):
         # 如果 request.since_time 存在，则忽略 duration，返回该时间点之后的内容
         text = recognition_buffer.get_recent(
             duration=request.duration, 
-            start_time=request.since_time
+            start_time=request.since_time   
         )
         return RecognitionResponse(text=text, success=True)
     except Exception as e:

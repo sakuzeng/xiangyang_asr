@@ -1,6 +1,6 @@
 # TODO tail -f 显示流式异常
 # FIXED logger显示不能流式显示了
-# TEST 设置对话中的最大识别时间（有可能会一直说话）
+# FIXED 设置对话中的最大识别时间（有可能会一直说话）
 import sys
 import os
 import time
@@ -131,7 +131,17 @@ class InteractionSystem:
         if delay > 0:
             time.sleep(delay)
             
-        self.vad.reset_states()
+        # VAD 状态重置 (兼容性处理)
+        if hasattr(self.vad, "reset_states"):
+            self.vad.reset_states()
+        elif hasattr(self.vad, "reset"):
+            self.vad.reset()
+        else:
+            # 如果不支持重置，重新创建一个实例 (使用交互模式的默认参数)
+            # 注意: 这里假设主要在交互模式下调用此重置
+            logger.info("🔄 重新创建 VAD 实例 (重置参数)")
+            self.vad = VADIterator(min_silence_duration_ms=1000, speech_pad_ms=200)
+
         self.model.reset()
         self.current_text_buffer = ""
         self.is_speech_active = False
@@ -162,8 +172,8 @@ class InteractionSystem:
             
             # min_silence_duration_ms : 决定了 “等多久才算完”
             # speech_pad_ms : 决定了 “多保留多少声音”
-            # 🆕 优化: 将 speech_pad_ms 从 1500ms 降低到 500ms，减少音频重叠导致的"变变"重复问题
-            self.vad = VADIterator(min_silence_duration_ms=2000, speech_pad_ms=200)
+            # 🆕 优化: 将 min_silence_duration_ms 从 2000ms 降低到 1000ms，避免静音段过长导致模型幻觉
+            self.vad = VADIterator(min_silence_duration_ms=1000, speech_pad_ms=200)
             
             self.state = self.STATE_LISTENING
             
@@ -200,7 +210,7 @@ class InteractionSystem:
         
         # 录音参数
         listen_duration = 8.0  # 最大聆听时间
-        silence_timeout = 2.0  # 沉默超时
+        silence_timeout = 1.0  # 沉默超时 (VAD已确认静音，应用层无需久等)
         
         recognition_buffer.start_recording()
         

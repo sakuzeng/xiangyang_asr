@@ -10,7 +10,7 @@ logger = setup_logger("tts_client")
 TTS_SERVER_URL = "http://192.168.77.103:28001/speak_msg"
 TTS_MONITOR_URL = "http://192.168.77.103:28001/monitor"
 TTS_EXCLUSIVE_MODE_URL = "http://192.168.77.103:28001/control/exclusive_mode"
-TTS_STOP_CURRENT_PLAY_URL = "http://192.168.77.103:28001/control/stop_current_play"
+TTS_STOP_CURRENT_PLAY_URL = "http://192.168.77.103:28001/control/stop_current_playback"
 class TTSClient:
     """HTTP TTS 客户端"""
     DEFAULT_SOURCE = "interaction"
@@ -40,7 +40,7 @@ class TTSClient:
                 
                 while time.time() - start_time < max_wait_seconds:
                     attempt += 1
-                    response = requests.post(TTS_CONTROL_URL, json=payload, timeout=2.0)
+                    response = requests.post(TTS_EXCLUSIVE_MODE_URL, json=payload, timeout=2.0)
                     
                     if response.status_code == 200:
                         data = response.json()
@@ -60,7 +60,7 @@ class TTSClient:
                 logger.error(f"❌ [{allowed_source}] 获取独占权超时 ({max_wait_seconds}秒)")
                 return False
             else:
-                response = requests.post(TTS_CONTROL_URL, json=payload, timeout=2.0)
+                response = requests.post(TTS_EXCLUSIVE_MODE_URL, json=payload, timeout=2.0)
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("is_granted", False):
@@ -89,7 +89,7 @@ class TTSClient:
                 "allowed_source": source
             }
 
-            response = requests.post(TTS_STOP_CURRENT_PLAY_URL, json=payload, timeout=2.0)
+            response = requests.post(TTS_STOP_CURRENT_PLAY_URL, json=payload, timeout=7.0)
             if response.status_code == 200:
                 logger.info(f"🛑 [{source}] 已发送停止当前播放请求")
                 return True
